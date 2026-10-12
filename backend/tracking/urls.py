@@ -1,9 +1,16 @@
 ﻿from django.urls import path
-from .views import IngestTelemetryView, LatestPositionsView, HealthCheckView, AlertsListView
+from .views import (
+    IngestTelemetryView,
+    LatestPositionsView,
+    HealthCheckView,
+    AlertsListView,
+    DBSCANClusteringView,
+)
 
 urlpatterns = [
     path('health/', HealthCheckView.as_view(), name='health'),
     path('telemetry/', IngestTelemetryView.as_view(), name='ingest-telemetry'),
     path('trackers/latest/', LatestPositionsView.as_view(), name='latest-positions'),
     path('alerts/', AlertsListView.as_view(), name='alerts-list'),
+    path('analytics/clusters/', DBSCANClusteringView.as_view(), name='dbscan-clusters'),
 ]
