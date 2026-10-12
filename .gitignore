@@ -1,0 +1,6 @@
+.env
+pgdata/
+nodered/node_modules/
+nodered/flows_cred.json
+.venv/
+__pycache__/

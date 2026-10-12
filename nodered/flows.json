@@ -1,0 +1,52 @@
+﻿[
+  {
+    "id": "tab1",
+    "type": "tab",
+    "label": "Flow 1"
+  },
+  {
+    "id": "broker1",
+    "type": "mqtt-broker",
+    "name": "Mosquitto",
+    "broker": "mosquitto",
+    "port": "1883",
+    "clientid": "",
+    "autoConnect": true,
+    "usetls": false,
+    "protocolVersion": "4",
+    "keepalive": "60",
+    "cleansession": true
+  },
+  {
+    "id": "mqtt_in_1",
+    "type": "mqtt in",
+    "z": "tab1",
+    "name": "",
+    "topic": "livestock/#",
+    "qos": "0",
+    "datatype": "auto-detect",
+    "broker": "broker1",
+    "nl": false,
+    "rap": true,
+    "rh": 0,
+    "inputs": 0,
+    "x": 160,
+    "y": 120,
+    "wires": [["debug_1"]]
+  },
+  {
+    "id": "debug_1",
+    "type": "debug",
+    "z": "tab1",
+    "name": "debug",
+    "active": true,
+    "tosidebar": true,
+    "console": false,
+    "tostatus": false,
+    "complete": "payload",
+    "targetType": "msg",
+    "x": 380,
+    "y": 120,
+    "wires": []
+  }
+]

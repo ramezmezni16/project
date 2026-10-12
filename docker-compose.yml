@@ -18,6 +18,7 @@ services:
 
   nodered:
     image: nodered/node-red:latest
+    user: root
     ports: ["1880:1880"]
     environment:
       - INGEST_API_KEY=${INGEST_API_KEY}
