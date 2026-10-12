@@ -2,7 +2,7 @@
   {
     "id": "tab1",
     "type": "tab",
-    "label": "Flow 1"
+    "label": "Telemetry Pipeline"
   },
   {
     "id": "broker1",
@@ -21,32 +21,48 @@
     "id": "mqtt_in_1",
     "type": "mqtt in",
     "z": "tab1",
-    "name": "",
-    "topic": "livestock/#",
-    "qos": "0",
+    "name": "livestock/+/uplink",
+    "topic": "livestock/+/uplink",
+    "qos": "1",
     "datatype": "auto-detect",
     "broker": "broker1",
     "nl": false,
     "rap": true,
     "rh": 0,
     "inputs": 0,
-    "x": 160,
-    "y": 120,
+    "x": 170,
+    "y": 140,
+    "wires": [["val_func_1"]]
+  },
+  {
+    "id": "val_func_1",
+    "type": "function",
+    "z": "tab1",
+    "name": "validate",
+    "func": "let p = typeof msg.payload === 'string' ? JSON.parse(msg.payload) : msg.payload;\n\nif (!p || typeof p !== 'object') return null;\n\n// Check contract rules from CONTRACT.md\nif (!p.tracker_id || typeof p.tracker_id !== 'string') return null;\nif (!p.ts || isNaN(Date.parse(p.ts))) return null;\nif (typeof p.lat !== 'number' || p.lat < -90 || p.lat > 90) return null;\nif (typeof p.lon !== 'number' || p.lon < -180 || p.lon > 180) return null;\nif (typeof p.speed !== 'number' || p.speed < 0) return null;\nif (typeof p.activity !== 'number' || p.activity < 0 || p.activity > 1) return null;\nif (typeof p.battery !== 'number' || p.battery < 0 || p.battery > 100) return null;\n\nmsg.payload = p;\nreturn msg;",
+    "outputs": 1,
+    "timeout": 0,
+    "noerr": 0,
+    "initialize": "",
+    "finalize": "",
+    "libs": [],
+    "x": 360,
+    "y": 140,
     "wires": [["debug_1"]]
   },
   {
     "id": "debug_1",
     "type": "debug",
     "z": "tab1",
-    "name": "debug",
+    "name": "validated telemetry",
     "active": true,
     "tosidebar": true,
     "console": false,
     "tostatus": false,
     "complete": "payload",
     "targetType": "msg",
-    "x": 380,
-    "y": 120,
+    "x": 580,
+    "y": 140,
     "wires": []
   }
 ]
