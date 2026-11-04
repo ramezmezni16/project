@@ -7,6 +7,7 @@ from rest_framework.response import Response
 from rest_framework import status
 from .models import Telemetry, Alert
 from .serializers import TelemetrySerializer, AlertSerializer
+from .ml import detect_anomaly
 
 FARM_CENTER_LAT = 36.9553
 FARM_CENTER_LON = 8.7598
@@ -120,8 +121,8 @@ class DBSCANClusteringView(APIView):
         coords_rad = np.radians(coords)
 
         # 6371000 meters Earth radius; 150 meters epsilon
-        eps_meters = float(request.query_params.get('eps', 150))
-        min_samples = int(request.query_params.get('min_samples', 5))
+        eps_meters = float(request.query_params.get('eps', 40))
+        min_samples = int(request.query_params.get('min_samples', 20))
         eps_rad = eps_meters / 6371000.0
 
         db = DBSCAN(eps=eps_rad, min_samples=min_samples, metric='haversine')
@@ -138,11 +139,19 @@ class DBSCANClusteringView(APIView):
             centroid_lat = float(np.mean(cluster_points[:, 0]))
             centroid_lon = float(np.mean(cluster_points[:, 1]))
             clusters.append({
-                'cluster_id': int(k),
-                'center_lat': round(centroid_lat, 6),
-                'center_lon': round(centroid_lon, 6),
-                'point_count': int(len(cluster_points)),
-                'label': f'Habitual Grazing Zone {k + 1}'
+                            dists = [
+                                calculate_distance_meters(centroid_lat, centroid_lon, la, lo)
+                                for la, lo in cluster_points
+                            ]
+                            radius_m = float(np.percentile(dists, 95)) + 20.0
+                            clusters.append({
+                                'cluster_id': int(k),
+                                'center_lat': round(centroid_lat, 6),
+                                'center_lon': round(centroid_lon, 6),
+                                'radius_m': round(radius_m, 1),
+                                'point_count': int(len(cluster_points)),
+                                'label': f'Habitual Grazing Zone {k + 1}'
+                            })
             })
 
         return Response({
@@ -151,6 +160,77 @@ class DBSCANClusteringView(APIView):
             'habitual_zones': clusters,
             'noise_outliers_count': noise_count,
             'algorithm': 'DBSCAN (Haversine)'
+        })
+class IsolationForestAnomaliesView(APIView):
+    """
+    Analyses the latest telemetry reading of each tracker
+    using the trained Isolation Forest model.
+    """
+
+    def get(self, request):
+        tracker_id = request.query_params.get('tracker_id')
+
+        tracker_ids = Telemetry.objects.order_by().values_list(
+            'tracker_id', flat=True
+        ).distinct()
+
+        if tracker_id:
+            tracker_ids = tracker_ids.filter(tracker_id=tracker_id)
+
+        results = []
+
+        try:
+            for tid in tracker_ids:
+                point = Telemetry.objects.filter(
+                    tracker_id=tid
+                ).order_by('-ts').first()
+
+                if not point:
+                    continue
+
+                if point.speed is None or point.activity is None:
+                    continue
+
+                prediction = detect_anomaly(
+                    speed=point.speed,
+                    activity=point.activity,
+                    lat=point.lat,
+                    lon=point.lon
+                )
+
+                results.append({
+                    'tracker_id': point.tracker_id,
+                    'ts': point.ts,
+                    'lat': point.lat,
+                    'lon': point.lon,
+                    'speed': point.speed,
+                    'activity': point.activity,
+                    'is_anomaly': prediction['is_anomaly'],
+                    'anomaly_score': prediction['anomaly_score'],
+                    'decision_score': prediction['decision_score'],
+                    'prediction': (
+                        'ANOMALY'
+                        if prediction['is_anomaly']
+                        else 'NORMAL'
+                    )
+                })
+
+        except FileNotFoundError:
+            return Response(
+                {'error': 'Isolation Forest model has not been trained.'},
+                status=status.HTTP_503_SERVICE_UNAVAILABLE
+            )
+
+        except ValueError as error:
+            return Response(
+                {'error': str(error)},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        return Response({
+            'algorithm': 'Isolation Forest',
+            'trackers_analyzed': len(results),
+            'results': results
         })
 
 class HealthCheckView(APIView):

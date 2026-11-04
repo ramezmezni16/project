@@ -21,7 +21,7 @@
                     "v": 4,
                     "tabs": [],
                     "primary": {
-                        "width": 699,
+                        "width": 300,
                         "top": {
                             "tabs": [
                                 "info",
@@ -29,9 +29,9 @@
                                 "config",
                                 "context"
                             ],
-                            "height": 101.285858,
+                            "height": 245.571858,
                             "hidden": false,
-                            "active": "info"
+                            "active": "config"
                         },
                         "bottom": {
                             "tabs": [
@@ -47,7 +47,7 @@
                             "tabs": [
                                 "explorer"
                             ],
-                            "height": 302.28585799999996,
+                            "height": 304.57185799999996,
                             "hidden": false,
                             "active": "explorer"
                         },
@@ -61,6 +61,7 @@
                     }
                 }
             }
-        }
+        },
+        "menu-menu-item-right-sidebar": true
     }
 }

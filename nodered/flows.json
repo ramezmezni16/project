@@ -1,88 +1,116 @@
-﻿[
-  {
-    "id": "tab1",
-    "type": "tab",
-    "label": "Telemetry Pipeline"
-  },
-  {
-    "id": "broker1",
-    "type": "mqtt-broker",
-    "name": "Mosquitto",
-    "broker": "mosquitto",
-    "port": "1883",
-    "clientid": "",
-    "autoConnect": true,
-    "usetls": false,
-    "protocolVersion": "4",
-    "keepalive": "60",
-    "cleansession": true
-  },
-  {
-    "id": "mqtt_in_1",
-    "type": "mqtt in",
-    "z": "tab1",
-    "name": "livestock/+/uplink",
-    "topic": "livestock/+/uplink",
-    "qos": "1",
-    "datatype": "auto-detect",
-    "broker": "broker1",
-    "nl": false,
-    "rap": true,
-    "rh": 0,
-    "inputs": 0,
-    "x": 150,
-    "y": 140,
-    "wires": [["val_func_1"]]
-  },
-  {
-    "id": "val_func_1",
-    "type": "function",
-    "z": "tab1",
-    "name": "validate & prepare",
-    "func": "let p = typeof msg.payload === 'string' ? JSON.parse(msg.payload) : msg.payload;\n\nif (!p || typeof p !== 'object') return null;\n\nif (!p.tracker_id || typeof p.tracker_id !== 'string') return null;\nif (!p.ts || isNaN(Date.parse(p.ts))) return null;\nif (typeof p.lat !== 'number' || p.lat < -90 || p.lat > 90) return null;\nif (typeof p.lon !== 'number' || p.lon < -180 || p.lon > 180) return null;\nif (typeof p.speed !== 'number' || p.speed < 0) return null;\nif (typeof p.activity !== 'number' || p.activity < 0 || p.activity > 1) return null;\nif (typeof p.battery !== 'number' || p.battery < 0 || p.battery > 100) return null;\n\nmsg.payload = p;\nmsg.headers = {\n    'Content-Type': 'application/json',\n    'X-API-Key': env.get('INGEST_API_KEY') || 'dev-ingest-key-123'\n};\nreturn msg;",
-    "outputs": 1,
-    "timeout": 0,
-    "noerr": 0,
-    "initialize": "",
-    "finalize": "",
-    "libs": [],
-    "x": 370,
-    "y": 140,
-    "wires": [["http_out_1"]]
-  },
-  {
-    "id": "http_out_1",
-    "type": "http request",
-    "z": "tab1",
-    "name": "POST /api/telemetry/",
-    "method": "POST",
-    "ret": "obj",
-    "paytoqs": "ignore",
-    "url": "http://backend:8000/api/telemetry/",
-    "tls": "",
-    "persist": false,
-    "proxy": "",
-    "insecureHTTPParser": false,
-    "authType": "",
-    "senderr": false,
-    "headers": [],
-    "x": 610,
-    "y": 140,
-    "wires": [["debug_1"]]
-  },
-  {
-    "id": "debug_1",
-    "type": "debug",
-    "z": "tab1",
-    "name": "ingest response",
-    "active": true,
-    "tosidebar": true,
-    "console": false,
-    "tostatus": false,
-    "complete": "payload",
-    "targetType": "msg",
-    "x": 840,
-    "y": 140,
-    "wires": []
-  }
+[
+    {
+        "id": "tab1",
+        "type": "tab",
+        "label": "Telemetry Pipeline",
+        "disabled": false,
+        "info": ""
+    },
+    {
+        "id": "broker1",
+        "type": "mqtt-broker",
+        "name": "Mosquitto",
+        "broker": "localhost",
+        "port": "1883",
+        "clientid": "",
+        "autoConnect": true,
+        "usetls": false,
+        "protocolVersion": "4",
+        "keepalive": "60",
+        "cleansession": true,
+        "autoUnsubscribe": true,
+        "birthTopic": "",
+        "birthQos": "0",
+        "birthPayload": "",
+        "birthMsg": {},
+        "closeTopic": "",
+        "closePayload": "",
+        "closeMsg": {},
+        "willTopic": "",
+        "willQos": "0",
+        "willPayload": "",
+        "willMsg": {},
+        "userProps": "",
+        "sessionExpiry": ""
+    },
+    {
+        "id": "mqtt_in_1",
+        "type": "mqtt in",
+        "z": "tab1",
+        "name": "livestock/+/uplink",
+        "topic": "livestock/+/uplink",
+        "qos": "1",
+        "datatype": "auto-detect",
+        "broker": "broker1",
+        "nl": false,
+        "rap": true,
+        "rh": 0,
+        "inputs": 0,
+        "x": 150,
+        "y": 140,
+        "wires": [
+            [
+                "val_func_1"
+            ]
+        ]
+    },
+    {
+        "id": "val_func_1",
+        "type": "function",
+        "z": "tab1",
+        "name": "validate & prepare",
+        "func": "let p = typeof msg.payload === 'string' ? JSON.parse(msg.payload) : msg.payload;\n\nif (!p || typeof p !== 'object') return null;\n\nif (!p.tracker_id || typeof p.tracker_id !== 'string') return null;\nif (!p.ts || isNaN(Date.parse(p.ts))) return null;\nif (typeof p.lat !== 'number' || p.lat < -90 || p.lat > 90) return null;\nif (typeof p.lon !== 'number' || p.lon < -180 || p.lon > 180) return null;\nif (typeof p.speed !== 'number' || p.speed < 0) return null;\nif (typeof p.activity !== 'number' || p.activity < 0 || p.activity > 1) return null;\nif (typeof p.battery !== 'number' || p.battery < 0 || p.battery > 100) return null;\n\nmsg.payload = p;\nmsg.headers = {\n    'Content-Type': 'application/json',\n    'X-API-Key': env.get('INGEST_API_KEY') || 'dev-ingest-key-123'\n};\nreturn msg;",
+        "outputs": 1,
+        "timeout": 0,
+        "noerr": 0,
+        "initialize": "",
+        "finalize": "",
+        "libs": [],
+        "x": 370,
+        "y": 140,
+        "wires": [
+            [
+                "http_out_1"
+            ]
+        ]
+    },
+    {
+        "id": "http_out_1",
+        "type": "http request",
+        "z": "tab1",
+        "name": "POST /api/telemetry/",
+        "method": "POST",
+        "ret": "obj",
+        "paytoqs": "ignore",
+        "url": "http://backend:8000/api/telemetry/",
+        "tls": "",
+        "persist": false,
+        "proxy": "",
+        "insecureHTTPParser": false,
+        "authType": "",
+        "senderr": false,
+        "headers": [],
+        "x": 610,
+        "y": 140,
+        "wires": [
+            [
+                "debug_1"
+            ]
+        ]
+    },
+    {
+        "id": "debug_1",
+        "type": "debug",
+        "z": "tab1",
+        "name": "ingest response",
+        "active": true,
+        "tosidebar": true,
+        "console": false,
+        "tostatus": false,
+        "complete": "payload",
+        "targetType": "msg",
+        "x": 840,
+        "y": 140,
+        "wires": []
+    }
 ]

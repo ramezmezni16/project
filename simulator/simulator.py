@@ -44,13 +44,17 @@ def main():
     client.connect(BROKER, PORT); client.loop_start()
     cows = {t: Cow(t) for t in TRACKERS}
     def publish(cow, ts):
-        client.publish(f"livestock/{cow.tid}/uplink", json.dumps(message(cow, ts)), qos=1)
+        return client.publish(f"livestock/{cow.tid}/uplink", json.dumps(message(cow, ts)), qos=1)
     if len(sys.argv) == 3 and sys.argv[1] == "history":      # python simulator.py history 14
         end = datetime.now(timezone.utc)
         t = end - timedelta(days=int(sys.argv[2]))
+        info = None
         while t < end:
-            for c in cows.values(): publish(c, t)
-            t += timedelta(minutes=5); time.sleep(0.01)
+            for c in cows.values(): info = publish(c, t)
+            t += timedelta(minutes=5); time.sleep(0.02)
+        info.wait_for_publish()
+        time.sleep(1)
+        client.loop_stop(); client.disconnect()
     else:                                                     # python simulator.py
         def commands():
             while True:
