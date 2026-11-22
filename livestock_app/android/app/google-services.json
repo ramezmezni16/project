@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "626493548969",
+    "project_id": "livestock-tracker-8b8cd",
+    "storage_bucket": "livestock-tracker-8b8cd.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:626493548969:android:05c239c21deb53e3493cb8",
+        "android_client_info": {
+          "package_name": "com.example.livestock_app"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyByhnH02PtRrqqWzdf-ADSNly8FMEHsAVw"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

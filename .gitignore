@@ -4,3 +4,4 @@ nodered/node_modules/
 nodered/flows_cred.json
 .venv/
 __pycache__/
+backend/firebase-service-account.json

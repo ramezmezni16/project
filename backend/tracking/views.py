@@ -5,9 +5,21 @@ from sklearn.cluster import DBSCAN
 from rest_framework.views import APIView
 from rest_framework.response import Response
 from rest_framework import status
-from .models import Telemetry, Alert
-from .serializers import TelemetrySerializer, AlertSerializer
 from .ml import detect_anomaly
+from django.utils import timezone
+from rest_framework.permissions import IsAuthenticated
+from accounts.models import Profile
+from .models import Telemetry, Alert, ShepherdLocation
+from .serializers import (
+    TelemetrySerializer,
+    AlertSerializer,
+    ShepherdLocationSerializer,
+)
+from accounts.models import Profile
+from accounts.push_notifications import send_push_notification
+from django.db import models
+from datetime import timedelta
+from django.utils import timezone
 
 FARM_CENTER_LAT = 36.9553
 FARM_CENTER_LON = 8.7598
@@ -22,6 +34,7 @@ def calculate_distance_meters(lat1, lon1, lat2, lon2):
     c = 2.0 * math.atan2(math.sqrt(a), math.sqrt(1.0 - a))
     return R * c
 
+
 def check_anomalies(data):
     alerts = []
     tid = data['tracker_id']
@@ -31,7 +44,10 @@ def check_anomalies(data):
     activity = data.get('activity') or 0.0
     battery = data.get('battery') or 100.0
 
-    distance = calculate_distance_meters(lat, lon, FARM_CENTER_LAT, FARM_CENTER_LON)
+    distance = calculate_distance_meters(
+        lat, lon, FARM_CENTER_LAT, FARM_CENTER_LON
+    )
+
     if distance > MAX_GEOFENCE_RADIUS_METERS:
         alerts.append(Alert(
             tracker_id=tid,
@@ -68,9 +84,51 @@ def check_anomalies(data):
             lat=lat, lon=lon, ts=ts
         ))
 
-    if alerts:
-        Alert.objects.bulk_create(alerts)
-    return len(alerts)
+    # Suppress duplicate alerts for 15 minutes per tracker and alert type.
+    cutoff = timezone.now() - timedelta(minutes=15)
+
+    new_alerts = []
+
+    for alert in alerts:
+        already_exists = Alert.objects.filter(
+            tracker_id=tid,
+            alert_type=alert.alert_type,
+            created_at__gte=cutoff,
+        ).exists()
+
+        if not already_exists:
+            new_alerts.append(alert)
+
+    if not new_alerts:
+        return 0
+
+    Alert.objects.bulk_create(new_alerts)
+
+    recipients = Profile.objects.filter(
+        models.Q(role=Profile.Role.OWNER) |
+        models.Q(
+            role=Profile.Role.SHEPHERD,
+            owner__profile__role=Profile.Role.OWNER,
+            user__is_active=True,
+        )
+    ).distinct().select_related("user")
+
+    for profile in recipients:
+        for alert in new_alerts:
+            send_push_notification(
+                user=profile.user,
+                title=f"{alert.severity}: {alert.alert_type}",
+                body=alert.message,
+                data={
+                    "type": "livestock_alert",
+                    "alert_type": alert.alert_type,
+                    "tracker_id": alert.tracker_id,
+                },
+            )
+
+    return len(new_alerts)
+
+
 
 class IngestTelemetryView(APIView):
     def post(self, request):
@@ -135,23 +193,31 @@ class DBSCANClusteringView(APIView):
         for k in sorted(unique_labels):
             if k == -1:
                 continue  # Noise / Outliers
+
             cluster_points = coords[labels == k]
+
             centroid_lat = float(np.mean(cluster_points[:, 0]))
             centroid_lon = float(np.mean(cluster_points[:, 1]))
+
+            dists = [
+                calculate_distance_meters(
+                    centroid_lat,
+                    centroid_lon,
+                    la,
+                    lo
+                )
+                for la, lo in cluster_points
+            ]
+
+            radius_m = float(np.percentile(dists, 95)) + 20.0
+
             clusters.append({
-                            dists = [
-                                calculate_distance_meters(centroid_lat, centroid_lon, la, lo)
-                                for la, lo in cluster_points
-                            ]
-                            radius_m = float(np.percentile(dists, 95)) + 20.0
-                            clusters.append({
-                                'cluster_id': int(k),
-                                'center_lat': round(centroid_lat, 6),
-                                'center_lon': round(centroid_lon, 6),
-                                'radius_m': round(radius_m, 1),
-                                'point_count': int(len(cluster_points)),
-                                'label': f'Habitual Grazing Zone {k + 1}'
-                            })
+                'cluster_id': int(k),
+                'center_lat': round(centroid_lat, 6),
+                'center_lon': round(centroid_lon, 6),
+                'radius_m': round(radius_m, 1),
+                'point_count': int(len(cluster_points)),
+                'label': f'Habitual Grazing Zone {k + 1}'
             })
 
         return Response({
@@ -236,3 +302,106 @@ class IsolationForestAnomaliesView(APIView):
 class HealthCheckView(APIView):
     def get(self, request):
         return Response({'status': 'healthy', 'service': 'livestock-backend'})
+
+
+class ShepherdLocationUpdateView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def post(self, request):
+        try:
+            profile = request.user.profile
+        except Profile.DoesNotExist:
+            return Response(
+                {'error': 'User profile not found.'},
+                status=status.HTTP_403_FORBIDDEN
+            )
+
+        if profile.role != Profile.Role.SHEPHERD:
+            return Response(
+                {'error': 'Only shepherd accounts can submit locations.'},
+                status=status.HTTP_403_FORBIDDEN
+            )
+
+        lat = request.data.get('lat')
+        lon = request.data.get('lon')
+
+        try:
+            lat = float(lat)
+            lon = float(lon)
+
+            if not (-90 <= lat <= 90 and -180 <= lon <= 180):
+                raise ValueError()
+        except (TypeError, ValueError):
+            return Response(
+                {'error': 'Valid latitude and longitude are required.'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        def optional_float(value):
+            if value is None:
+                return None
+            try:
+                number = float(value)
+                if not math.isfinite(number):
+                    raise ValueError()
+                return number
+            except (TypeError, ValueError):
+                raise ValueError()
+
+        try:
+            accuracy = optional_float(request.data.get('accuracy'))
+            speed = optional_float(request.data.get('speed'))
+        except ValueError:
+            return Response(
+                {'error': 'Accuracy and speed must be valid numbers.'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        location, _ = ShepherdLocation.objects.update_or_create(
+            shepherd=request.user,
+            defaults={
+                'lat': lat,
+                'lon': lon,
+                'accuracy': accuracy,
+                'speed': speed,
+                'recorded_at': timezone.now(),
+            }
+        )
+
+        return Response(
+            ShepherdLocationSerializer(location).data,
+            status=status.HTTP_200_OK
+        )
+
+
+class ShepherdLocationsListView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request):
+        try:
+            profile = request.user.profile
+        except Profile.DoesNotExist:
+            return Response(
+                {'error': 'User profile not found.'},
+                status=status.HTTP_403_FORBIDDEN
+            )
+
+        if profile.role != Profile.Role.OWNER:
+            return Response(
+                {'error': 'Only owners can view shepherd locations.'},
+                status=status.HTTP_403_FORBIDDEN
+            )
+
+        shepherd_ids = Profile.objects.filter(
+            owner=request.user,
+            role=Profile.Role.SHEPHERD
+        ).values_list('user_id', flat=True)
+
+        locations = ShepherdLocation.objects.filter(
+            shepherd_id__in=shepherd_ids
+        ).select_related('shepherd')
+
+        return Response(
+            ShepherdLocationSerializer(locations, many=True).data
+        )
+

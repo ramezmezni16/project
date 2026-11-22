@@ -1,3 +1,4 @@
+
 import 'package:flutter/material.dart';
 import 'package:flutter_map/flutter_map.dart';
 import 'package:latlong2/latlong.dart';
@@ -7,6 +8,7 @@ const Color _green = Color(0xFF16865B);
 const Color _navy = Color(0xFF17243A);
 const Color _muted = Color(0xFF8290A5);
 const Color _amber = Color(0xFFE39B35);
+const Color _shepherdBlue = Color(0xFF2878D0);
 
 const List<Color> _zoneColors = [
   Color(0xFF3867D6),
@@ -18,11 +20,13 @@ const List<Color> _zoneColors = [
 class MapScreen extends StatelessWidget {
   final List<dynamic> trackers;
   final List<dynamic> zones;
+  final List<dynamic> shepherds;
 
   const MapScreen({
     super.key,
     required this.trackers,
     required this.zones,
+    this.shepherds = const [],
   });
 
   double? _toDouble(dynamic value) {
@@ -32,17 +36,22 @@ class MapScreen extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-        const distance = Distance();
+    const distance = Distance();
+
     final zoneAreas = <({LatLng center, double radius})>[];
+
     for (final zone in zones) {
       final zl = _toDouble(zone['center_lat']);
       final zo = _toDouble(zone['center_lon']);
+
       if (zl == null || zo == null) continue;
+
       zoneAreas.add((
         center: LatLng(zl, zo),
         radius: _toDouble(zone['radius_m']) ?? 150,
       ));
     }
+
     final markers = <Marker>[];
     final circles = <CircleMarker>[];
     final points = <LatLng>[];
@@ -58,10 +67,13 @@ class MapScreen extends StatelessWidget {
       points.add(point);
 
       final isAnomaly = tracker['is_anomaly'] == true;
+
       final outsideZones = zoneAreas.isNotEmpty &&
           zoneAreas.every(
-            (z) => distance.as(LengthUnit.Meter, point, z.center) > z.radius,
+            (z) =>
+                distance.as(LengthUnit.Meter, point, z.center) > z.radius,
           );
+
       final color = isAnomaly ? _red : (outsideZones ? _amber : _green);
 
       markers.add(
@@ -117,14 +129,12 @@ class MapScreen extends StatelessWidget {
           ? (zone['cluster_id'] as num).toInt()
           : 0;
 
-      final color =
-          _zoneColors[clusterId.abs() % _zoneColors.length];
+      final color = _zoneColors[clusterId.abs() % _zoneColors.length];
 
       final pointCount = zone['point_count'] ?? 0;
       final label = zone['label'] ?? 'Grazing Zone';
       final zoneRadius = _toDouble(zone['radius_m']) ?? 150;
 
-      // Approximate 150-metre circle around the DBSCAN centre.
       circles.add(
         CircleMarker(
           point: point,
@@ -136,7 +146,6 @@ class MapScreen extends StatelessWidget {
         ),
       );
 
-      // Label displayed at the centre of the zone.
       markers.add(
         Marker(
           point: point,
@@ -190,6 +199,62 @@ class MapScreen extends StatelessWidget {
       );
     }
 
+    // Display shepherd positions.
+    for (final shepherd in shepherds) {
+      final lat = _toDouble(shepherd['lat']);
+      final lon = _toDouble(shepherd['lon']);
+
+      if (lat == null || lon == null) continue;
+
+      final point = LatLng(lat, lon);
+      points.add(point);
+
+      final username = shepherd['username']?.toString() ?? 'Shepherd';
+
+      markers.add(
+        Marker(
+          point: point,
+          width: 110,
+          height: 70,
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              const Icon(
+                Icons.person_pin_circle,
+                size: 38,
+                color: _shepherdBlue,
+              ),
+              Container(
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 7,
+                  vertical: 3,
+                ),
+                decoration: BoxDecoration(
+                  color: Colors.white,
+                  borderRadius: BorderRadius.circular(5),
+                  border: Border.all(color: _shepherdBlue, width: 1),
+                  boxShadow: [
+                    BoxShadow(
+                      color: Colors.black.withValues(alpha: 0.12),
+                      blurRadius: 4,
+                    ),
+                  ],
+                ),
+                child: Text(
+                  username,
+                  style: const TextStyle(
+                    color: _navy,
+                    fontSize: 10,
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
+      );
+    }
+
     // Calculate map centre.
     LatLng center = const LatLng(36.9553, 8.7597);
 
@@ -219,7 +284,7 @@ class MapScreen extends StatelessWidget {
               userAgentPackageName: 'com.example.livestock_app',
             ),
 
-            // Zones are drawn underneath the animal markers.
+            // Zones are drawn underneath the markers.
             CircleLayer(circles: circles),
 
             MarkerLayer(markers: markers),
@@ -301,12 +366,12 @@ class MapScreen extends StatelessWidget {
                 _legendItem(_green, 'Normal tracker'),
                 _legendItem(_red, 'Anomaly detected'),
                 _legendItem(_amber, 'Outside habitual zones'),
-
                 _legendItem(
                   const Color(0xFF3867D6),
                   'Habitual grazing zone',
                   isCircle: true,
                 ),
+                _legendItem(_shepherdBlue, 'Shepherd location'),
 
                 const SizedBox(height: 8),
 
@@ -339,12 +404,8 @@ class MapScreen extends StatelessWidget {
             width: 12,
             height: 12,
             decoration: BoxDecoration(
-              color: isCircle
-                  ? color.withValues(alpha: 0.2)
-                  : color,
-              shape: isCircle
-                  ? BoxShape.circle
-                  : BoxShape.rectangle,
+              color: isCircle ? color.withValues(alpha: 0.2) : color,
+              shape: isCircle ? BoxShape.circle : BoxShape.rectangle,
               border: isCircle
                   ? Border.all(color: color, width: 1.5)
                   : null,

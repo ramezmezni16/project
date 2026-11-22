@@ -33,6 +33,7 @@ services:
     environment:
       - DB_HOST=db
       - DB_PORT=5432
+      - GOOGLE_APPLICATION_CREDENTIALS=/app/firebase-service-account.json
     volumes:
       - ./backend:/app
     depends_on:

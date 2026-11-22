@@ -2,4 +2,5 @@
 
 urlpatterns = [
     path('api/', include('tracking.urls')),
+    path('api/auth/', include('accounts.urls')),
 ]
